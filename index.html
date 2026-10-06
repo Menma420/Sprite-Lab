@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sprite Lab v0.8 — Character Construction Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">SPRITE REVERSE ENGINEERING WORKBENCH</div>
+      <h1>Sprite Lab <span>v0.8</span></h1>
+      <p>Measure structure. Extract a construction grammar. Rebuild it and prove the result.</p>
+    </div>
+    <div class="top-actions">
+      <button id="bundledBtn" class="button">Load Bundled Brendan</button>
+      <label class="button secondary">Load PNG<input id="fileInput" type="file" accept="image/png" hidden /></label>
+      <button id="copyReportBtn" class="button secondary" disabled>Copy JSON</button>
+      <button id="exportBtn" class="button secondary" disabled>Download JSON</button>
+      <button id="recipeJsonBtn" class="button secondary" disabled>Recipe JSON</button>
+      <button id="recipeMdBtn" class="button secondary" disabled>Recipe MD</button>
+      <button id="grammarJsonBtn" class="button secondary" disabled>Grammar JSON</button>
+      <button id="grammarMdBtn" class="button secondary" disabled>Grammar MD</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="statusbar">
+      <div id="statusDot" class="dot"></div>
+      <div id="statusText">No sprite loaded.</div>
+      <div id="formatBadge" class="badge">WAITING</div>
+    </section>
+
+    <section class="dropzone" id="dropzone">
+      <strong>Drop an indexed PNG here</strong>
+      <span>v0.7 fixes semantic slot bounds, produces a complete disjoint partition of visible pixels, and keeps deterministic reconstruction as the proof gate.</span>
+    </section>
+
+    <section class="workspace">
+      <div class="panel viewer-panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">SHEET / RAW PIXEL VIEW</div>
+            <h2 id="sheetTitle">No sprite loaded</h2>
+          </div>
+          <div class="controls">
+            <label>Zoom<select id="zoomSelect"><option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option><option value="8">8×</option></select></label>
+            <label><input id="gridToggle" type="checkbox" checked /> Grid</label>
+            <label><input id="bboxToggle" type="checkbox" checked /> BBox</label>
+            <label><input id="baselineToggle" type="checkbox" checked /> Baseline</label>
+            <label><input id="anatomyToggle" type="checkbox" checked /> Anatomy</label>
+            <label><input id="palette0Toggle" type="checkbox" checked /> Index 0 transparent</label>
+          </div>
+        </div>
+        <div class="canvas-wrap"><canvas id="sheetCanvas"></canvas></div>
+        <div class="legend">
+          <span><i class="swatch figure"></i> figure pixels</span>
+          <span><i class="swatch bbox"></i> measured bbox</span>
+          <span><i class="swatch center"></i> centerline</span>
+          <span><i class="swatch landmark"></i> landmarks</span>
+          <span class="muted">Hover a pixel for coordinates.</span>
+        </div>
+        <div class="frame-strip" id="frameStrip"></div>
+      </div>
+
+      <aside class="panel inspector">
+        <div class="eyebrow">FRAME INSPECTOR</div>
+        <h2>Frame <span id="frameNumber">—</span></h2>
+        <div id="emptyState" class="empty-state">Load a PNG to begin.</div>
+        <div id="metrics" class="metrics hidden"></div>
+        <div id="pixelReadout" class="pixel-readout hidden">x=— y=—</div>
+      </aside>
+    </section>
+
+    <section class="anatomy-layout">
+      <div class="panel anatomy-main">
+        <div class="panel-head compact">
+          <div>
+            <div class="eyebrow">ANATOMY / GEOMETRY LAB</div>
+            <h2>Selected frame blueprint</h2>
+          </div>
+          <div class="detail-controls">
+            <button id="maskBtn" class="button small">Mask</button>
+            <button id="mirrorBtn" class="button small secondary">Mirror</button>
+            <button id="resetLandmarksBtn" class="button small secondary">Reset landmarks</button>
+          </div>
+        </div>
+
+        <div class="anatomy-grid">
+          <div class="blueprint-wrap">
+            <canvas id="blueprintCanvas" width="256" height="512"></canvas>
+          </div>
+          <div class="profiles">
+            <div class="profile-card">
+              <div class="profile-head"><span>ROW PROFILE</span><span id="rowProfileMeta">—</span></div>
+              <canvas id="rowProfileCanvas" width="520" height="190"></canvas>
+            </div>
+            <div class="profile-card">
+              <div class="profile-head"><span>COLUMN PROFILE</span><span id="colProfileMeta">—</span></div>
+              <canvas id="colProfileCanvas" width="520" height="190"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="evidence-note">
+          <strong>Important:</strong> Anatomy labels are <em>measurement bands</em>, not AI guesses. Move the landmark rows to establish your own construction hypothesis; Sprite Lab reports the geometry inside each band.
+        </div>
+      </div>
+
+      <div class="panel landmark-panel">
+        <div class="eyebrow">LANDMARK EDITOR</div>
+        <h2>Construction bands</h2>
+        <div class="landmark-help">All coordinates are local to the 16×32 cell.</div>
+        <div id="landmarkControls" class="landmark-controls"></div>
+        <div class="centerline-control">
+          <label>Centerline X <input id="centerlineX" type="number" min="0" max="15" step="1" value="7" /></label>
+          <button id="autoCenterBtn" class="button small secondary">Auto-center</button>
+        </div>
+        <div class="band-summary" id="bandSummary"></div>
+      </div>
+    </section>
+
+    <section class="evidence-grid">
+      <div class="panel">
+        <div class="eyebrow">SILHOUETTE EVIDENCE</div>
+        <h2>Row / column geometry</h2>
+        <div class="mini-grid" id="geometryFacts"></div>
+      </div>
+
+      <div class="panel">
+        <div class="eyebrow">SYMMETRY</div>
+        <h2>Left ↔ right mass</h2>
+        <div class="symmetry-visual">
+          <canvas id="symmetryCanvas" width="256" height="512"></canvas>
+          <div id="symmetryMetrics" class="symmetry-metrics"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="eyebrow">FRAME DELTA</div>
+        <h2>What actually moves?</h2>
+        <div class="compare-controls">
+          <label>Reference frame<select id="compareFrameSelect"></select></label>
+          <label><input id="ignoreTranslationToggle" type="checkbox" /> Ignore best-fit translation</label>
+        </div>
+        <div class="compare-visual"><canvas id="deltaCanvas" width="256" height="512"></canvas></div>
+        <div id="deltaMetrics" class="mini-grid"></div>
+      </div>
+    </section>
+
+    <section class="panel forensic-panel">
+      <div class="panel-head compact">
+        <div>
+          <div class="eyebrow">FRAME FORENSICS</div>
+          <h2>Separate construction from motion</h2>
+        </div>
+        <div class="forensic-controls">
+          <label>Frame A<select id="forensicA"></select></label>
+          <label>Frame B<select id="forensicB"></select></label>
+          <label>View<select id="forensicMetric"><option value="silhouette">All changes</option><option value="added">Added pixels</option><option value="removed">Removed pixels</option><option value="recolored">Recolored pixels</option><option value="aligned">Best-fit aligned</option></select></label>
+        </div>
+      </div>
+      <div class="forensic-grid">
+        <div class="compare-visual"><canvas id="forensicCanvas" width="256" height="512"></canvas></div>
+        <div class="forensic-side">
+          <div id="forensicMetrics" class="mini-grid"></div>
+          <div class="forensic-table-wrap" id="forensicTable"></div>
+        </div>
+      </div>
+      <div class="evidence-note"><strong>Interpretation:</strong> red = removed, green = added, gold = recolored, purple = aligned/comparison emphasis. Use this to identify persistent body structure versus pixels that exist only because of the walk pose.</div>
+      <div class="deformation-panel">
+        <div class="eyebrow">DEFORMATION BREAKDOWN</div>
+        <h3>What did the global shift explain?</h3>
+        <div id="deformationBands" class="deformation-grid"></div>
+      </div>
+      <div class="motion-signatures"><div class="eyebrow">ANIMATION MOTION SIGNATURES</div><div id="motionSignature" class="signature-grid"></div></div>
+    </section>
+
+    <section class="panel recipe-panel">
+      <div class="panel-head compact">
+        <div>
+          <div class="eyebrow">CONSTRUCTION RECIPE EXTRACTOR</div>
+          <h2>Turn measured pixels into a reproducible model</h2>
+        </div>
+        <div class="recipe-actions">
+          <button id="recomputeRecipeBtn" class="button small">Recompute</button>
+        </div>
+      </div>
+      <div class="evidence-note"><strong>Method:</strong> measured facts stay separate from derived rules. Anatomy bands come from the editable landmarks; palette roles are heuristic suggestions, not source-authored labels.</div>
+      <div class="recipe-summary-grid" id="recipeSummary"></div>
+
+      <div class="recipe-layout">
+        <div class="recipe-visuals">
+          <div class="recipe-visual-card">
+            <div class="profile-head"><span>CANONICAL SCAFFOLD</span><span>South idle · Frame 0</span></div>
+            <canvas id="recipeSilhouetteCanvas" width="256" height="512"></canvas>
+          </div>
+          <div class="recipe-visual-card">
+            <div class="profile-head"><span>STABLE CORE</span><span>Across idle + aligned walk</span></div>
+            <canvas id="recipeInvariantCanvas" width="256" height="512"></canvas>
+          </div>
+          <div class="recipe-visual-card">
+            <div class="profile-head"><span>LOCAL DEFORMATION</span><span>After best-fit translation</span></div>
+            <canvas id="recipeMotionCanvas" width="256" height="512"></canvas>
+          </div>
+        </div>
+        <div>
+          <div class="recipe-block">
+            <div class="eyebrow">DERIVED CONSTRUCTION RULES</div>
+            <div id="recipeRules" class="recipe-rules"></div>
+          </div>
+          <div class="recipe-block">
+            <div class="eyebrow">DIRECTION MODEL</div>
+            <div id="recipeDirections" class="recipe-directions"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recipe-detail-grid">
+        <div class="recipe-block">
+          <div class="eyebrow">BAND GEOMETRY</div>
+          <div id="recipeBands" class="recipe-band-table"></div>
+        </div>
+        <div class="recipe-block">
+          <div class="eyebrow">PALETTE ROLE SUGGESTIONS</div>
+          <div id="recipePaletteRoles" class="recipe-palette-table"></div>
+        </div>
+      </div>
+
+      <div class="recipe-block">
+        <div class="eyebrow">MACHINE-READABLE RECIPE</div>
+        <pre id="recipeDsl" class="code-block"></pre>
+      </div>
+    </section>
+
+    <section class="panel grammar-panel">
+      <div class="panel-head compact">
+        <div>
+          <div class="eyebrow">CONSTRUCTION GRAMMAR / TEMPLATE EXTRACTION</div>
+          <h2>From measured pixels to a reproducible construction language</h2>
+        </div>
+        <div class="recipe-actions">
+          <button id="recomputeGrammarBtn" class="button small">Recompute grammar</button>
+          <button id="rebuildBtn" class="button small secondary">Rebuild from grammar</button>
+        </div>
+      </div>
+      <div class="evidence-note"><strong>Evidence boundary:</strong> source geometry, indexed palette topology, symmetry, and motion transforms are measured or derived from the PNG. Semantic slots are explicit construction hypotheses and do not claim original artist intent. “Rebuild” remains the hard source-replay proof. The Character Creator below is the authoring surface for new characters.</div>
+      <div class="grammar-summary-grid" id="grammarSummary"></div>
+      <div class="grammar-layout">
+        <div class="grammar-block">
+          <div class="eyebrow">SILHOUETTE GRAMMAR</div>
+          <div class="profile-head"><span>Row-span primitives</span><span>Frame 0</span></div>
+          <canvas id="grammarSilhouetteCanvas" width="256" height="512"></canvas>
+          <div id="grammarPrimitiveTable" class="grammar-table"></div>
+        </div>
+        <div class="grammar-block">
+          <div class="eyebrow">REGION TOPOLOGY</div>
+          <div id="grammarRegionTable" class="grammar-table"></div>
+        </div>
+        <div class="grammar-block">
+          <div class="eyebrow">WALK TRANSFORM GRAMMAR</div>
+          <div id="grammarMotionTable" class="grammar-table"></div>
+          <div class="motion-legend"><span><i class="dot-swatch stable"></i> invariant</span><span><i class="dot-swatch motion"></i> residual deformation</span></div>
+        </div>
+      </div>
+      <div class="grammar-block grammar-full-block">
+        <div class="eyebrow">SEMANTIC CONSTRUCTION SLOTS / HYPOTHESES</div>
+        <div id="grammarSemanticTable" class="grammar-table"></div>
+      </div>
+      <div class="grammar-proof-grid">
+        <div class="grammar-block">
+          <div class="eyebrow">RECONSTRUCTION PROOF</div>
+          <canvas id="grammarRebuildCanvas" width="256" height="512"></canvas>
+          <div id="grammarProofMetrics" class="mini-grid"></div>
+        </div>
+        <div class="grammar-block">
+          <div class="eyebrow">MACHINE-READABLE CONSTRUCTION GRAMMAR</div>
+          <pre id="grammarDsl" class="code-block"></pre>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="panel v07-panel">
+      <div class="panel-head compact">
+        <div>
+          <div class="eyebrow">V0.7 SEMANTIC CHARACTER CONSTRUCTION</div>
+          <h2>Rebuild Brendan from the grammar · then mutate the same grammar</h2>
+        </div>
+        <div class="recipe-actions">
+          <button id="v07RecomputeBtn" class="button small">Build semantic program</button>
+          <button id="v07ResetBtn" class="button small secondary">Reset character</button>
+          <button id="v07ExportBtn" class="button small secondary">Export v0.7 JSON</button>
+        </div>
+      </div>
+      <div class="evidence-note v07-note">
+        <strong>Golden rule:</strong> Brendan must be reconstructable without using <code>canonicalRowRuns</code>. Source mode uses the semantic slot programs; character mode applies the same slot geometry with authored substitutions. Brendan proof and generated-character output are evaluated separately.
+      </div>
+      <div class="v07-mode-row">
+        <label>Renderer mode
+          <select id="v07Mode">
+            <option value="brendan" selected>Brendan · exact semantic reconstruction</option>
+            <option value="uttkarsh">Uttkarsh · parameterized character</option>
+          </select>
+        </label>
+        <label>Palette
+          <select id="v07PaletteTheme">
+            <option value="brendan" selected>Brendan palette</option>
+            <option value="uttkarsh">Uttkarsh palette</option>
+            <option value="mono">Monochrome test</option>
+          </select>
+        </label>
+        <span class="v07-hint">Brendan mode is the zero-diff golden test. Uttkarsh mode is a grammar-based variation, not a traced replacement.</span>
+      </div>
+      <div class="v07-grid">
+        <div class="v07-card">
+          <div class="profile-head"><span>SOURCE</span><span>Brendan · frame 0</span></div>
+          <canvas id="v07SourceCanvas" width="256" height="512"></canvas>
+        </div>
+        <div class="v07-card">
+          <div class="profile-head"><span>SEMANTIC RENDER</span><span id="v07RenderLabel">—</span></div>
+          <canvas id="v07RenderCanvas" width="256" height="512"></canvas>
+        </div>
+        <div class="v07-card">
+          <div class="profile-head"><span>DIFF / GENERATED</span><span id="v07OutputLabel">—</span></div>
+          <canvas id="v07DiffCanvas" width="256" height="512"></canvas>
+        </div>
+      </div>
+      <div class="v07-proof-grid">
+        <div class="v07-proof-card">
+          <div class="eyebrow">SEMANTIC PROOF</div>
+          <div id="v07ProofMetrics" class="mini-grid"></div>
+        </div>
+        <div class="v07-proof-card">
+          <div class="eyebrow">PROGRAM</div>
+          <pre id="v07Program" class="code-block"></pre>
+        </div>
+      </div>
+      <div class="v07-generator" id="v07Generator">
+        <div class="v07-generator-main">
+          <div class="eyebrow">UTTKARSH PARAMETERS</div>
+          <div class="v07-sliders">
+            <label>Head width <output id="v07HeadWidthOut">12</output><input id="v07HeadWidth" type="range" min="10" max="14" step="1" value="12"></label>
+            <label>Head height <output id="v07HeadHeightOut">8</output><input id="v07HeadHeight" type="range" min="7" max="9" step="1" value="8"></label>
+            <label>Torso width <output id="v07TorsoWidthOut">8</output><input id="v07TorsoWidth" type="range" min="6" max="10" step="1" value="8"></label>
+            <label>Leg width <output id="v07LegWidthOut">3</output><input id="v07LegWidth" type="range" min="2" max="4" step="1" value="3"></label>
+            <label>Shoe width <output id="v07ShoeWidthOut">3</output><input id="v07ShoeWidth" type="range" min="2" max="4" step="1" value="3"></label>
+          </div>
+        </div>
+        <div class="v07-token-card">
+          <div class="eyebrow">SEMANTIC PALETTE TOKENS</div>
+          <div id="v07TokenSwatches" class="v07-token-swatches"></div>
+        </div>
+      </div>
+      <div class="v07-slots" id="v07SlotTable"></div>
+
+      <div class="creator-shell" id="creatorShell">
+        <div class="creator-head">
+          <div>
+            <div class="eyebrow">CHARACTER CREATOR</div>
+            <h3>Author your own trainer from the same grammar</h3>
+            <p class="creator-copy">Change semantic construction parameters and palette roles. No direct pixel painting is required.</p>
+          </div>
+          <div class="creator-actions">
+            <button id="creatorRandomBtn" class="button small secondary">Randomize</button>
+            <button id="creatorResetBtn" class="button small secondary">Reset</button>
+            <button id="creatorExportPngBtn" class="button small">Export PNG</button>
+            <button id="creatorExportSheetBtn" class="button small secondary">Export 4-dir</button>
+            <button id="creatorExportJsonBtn" class="button small secondary">Export Character JSON</button>
+          </div>
+        </div>
+        <div class="creator-layout">
+          <div class="creator-controls">
+            <div class="creator-group">
+              <label class="creator-name">Name<input id="creatorName" type="text" maxlength="24" value="Uttkarsh" /></label>
+              <label>Hair style<select id="creatorHair"><option value="cap">Cap / swept</option><option value="short" selected>Short</option><option value="spiky">Spiky</option></select></label>
+              <label>Face style<select id="creatorFace"><option value="standard" selected>Standard</option><option value="minimal">Minimal</option></select></label>
+              <label>Outfit<select id="creatorOutfit"><option value="teal" selected>Teal trainer</option><option value="dark">Dark trainer</option><option value="sport">Sport accent</option></select></label>
+              <label>Direction<select id="creatorDirection"><option value="south" selected>South</option><option value="north">North</option><option value="west">West</option><option value="east">East</option></select></label>
+            </div>
+            <div class="creator-group creator-sliders">
+              <label>Head width <output id="creatorHeadWidthOut">12</output><input id="creatorHeadWidth" type="range" min="10" max="14" value="12" /></label>
+              <label>Head height <output id="creatorHeadHeightOut">8</output><input id="creatorHeadHeight" type="range" min="7" max="9" value="8" /></label>
+              <label>Shoulder / torso width <output id="creatorTorsoWidthOut">8</output><input id="creatorTorsoWidth" type="range" min="6" max="10" value="8" /></label>
+              <label>Leg width <output id="creatorLegWidthOut">3</output><input id="creatorLegWidth" type="range" min="2" max="4" value="3" /></label>
+              <label>Shoe width <output id="creatorShoeWidthOut">3</output><input id="creatorShoeWidth" type="range" min="2" max="4" value="3" /></label>
+            </div>
+            <div class="creator-group palette-edit">
+              <div class="eyebrow">PALETTE ROLES</div>
+              <div class="palette-edit-grid">
+                <label>Outline<input id="creatorOutline" type="color" value="#121e1c" /></label>
+                <label>Skin light<input id="creatorSkinLight" type="color" value="#ffe0be" /></label>
+                <label>Skin mid<input id="creatorSkinMid" type="color" value="#efa888" /></label>
+                <label>Skin dark<input id="creatorSkinDark" type="color" value="#b56659" /></label>
+                <label>Cloth light<input id="creatorClothLight" type="color" value="#74cdbd" /></label>
+                <label>Cloth mid<input id="creatorClothMid" type="color" value="#39978d" /></label>
+                <label>Cloth dark<input id="creatorClothDark" type="color" value="#1c5b56" /></label>
+                <label>Accent<input id="creatorAccent" type="color" value="#ee5c58" /></label>
+                <label>Highlight<input id="creatorHighlight" type="color" value="#fffff4" /></label>
+              </div>
+            </div>
+          </div>
+          <div class="creator-preview">
+            <div class="profile-head"><span>LIVE CHARACTER</span><span id="creatorPreviewLabel">Uttkarsh · South</span></div>
+            <canvas id="creatorCanvas" width="256" height="512"></canvas>
+            <div id="creatorStats" class="creator-stats"></div>
+          </div>
+        </div>
+        <div class="creator-directions" id="creatorDirections"></div>
+      </div>
+    </section>
+
+    <section class="detail-grid">
+      <div class="panel palette-panel">
+        <div class="eyebrow">PALETTE</div>
+        <h2>Indexed colors</h2>
+        <div id="paletteGrid" class="palette-grid"></div>
+      </div>
+      <div class="panel geometry-panel">
+        <div class="eyebrow">RAW GEOMETRY</div>
+        <h2>Shape evidence</h2>
+        <div id="geometryTable" class="geometry-table"></div>
+      </div>
+      <div class="panel run-panel">
+        <div class="eyebrow">PIXEL DATA</div>
+        <h2>Deterministic representation</h2>
+        <pre id="rowRunsPreview" class="code-block">Select a frame.</pre>
+      </div>
+    </section>
+
+    <section class="lower-grid">
+      <div class="panel">
+        <div class="eyebrow">ANIMATION</div>
+        <h2>Emerald Object Event</h2>
+        <div class="anim-controls">
+          <label>Direction<select id="directionSelect"><option value="south">South</option><option value="north">North</option><option value="west">West</option><option value="east">East</option></select></label>
+          <label>Speed<select id="speedSelect"><option value="8" selected>Normal (8 ticks)</option><option value="4">Fast (4)</option><option value="2">Faster (2)</option><option value="1">Fastest (1)</option></select></label>
+          <button id="playBtn" class="button" disabled>Play</button>
+        </div>
+        <div class="sequence" id="sequence"></div>
+        <canvas id="animCanvas" class="anim-canvas" width="128" height="256"></canvas>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">VALIDATION</div>
+        <h2>Evidence checks</h2>
+        <div id="sanityChecks" class="checks"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>Sprite Lab v0.8 · offline</span><span>Pixels → measurements → topology → transforms → grammar → reconstruction proof</span></footer>
+  <script src="pako.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
